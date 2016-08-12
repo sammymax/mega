@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, g
+from flask import Flask, jsonify, request, g, redirect
 import os
 import json
 import sqlite3
@@ -18,6 +18,18 @@ def close_connection(exception):
     if db is not None:
         db.close()
 
+@application.route('/mega/reg', methods=['POST'])
+def register():
+    domain, token = request.form.get('domain'), request.form.get('token')
+    if domain is None or token is None:
+        return 'Invalid arguments'
+    tokenRow = getTokenRow(domain)
+    if tokenRow is not None:
+        return 'Slack domain is already registered!'
+    get_db().cursor().execute('INSERT INTO tokens VALUES (?,?)', [domain, token])
+    get_db().commit()
+    return 'Domain {} is now registered!'.format(domain)
+
 @application.route('/mega/img', methods=['POST'])
 def upload():
     f = request.files.get('file')
@@ -28,12 +40,9 @@ def upload():
 @application.route('/mega/slash', methods=['POST'])
 def mega():
     team, token = request.form.get('team_domain'), request.form.get('token')
-    cur = get_db().cursor()
-    cur.execute('SELECT * FROM tokens WHERE team=?', [team])
-    tokenRow = cur.fetchone()
+    tokenRow = getTokenRow(team)
     if tokenRow is None or tokenRow[1] != token:
-        print("not in")
-        return ''
+        return 'Bad team/token combination'
 
     req = request.form['text'].split()
     if len(req) == 0:
@@ -41,6 +50,7 @@ def mega():
     emoji = req[0]
     ops = '' if len(req) == 1 else req[1]
 
+    cur = get_db().cursor()
     cur.execute('SELECT * FROM dims WHERE team=? AND emoji=?', [team, emoji])
     dimRow = cur.fetchone()
     if dimRow != None:
@@ -54,6 +64,11 @@ def mega():
 def jsonLines(arr):
     txt = "\n".join(arr)
     return jsonify({"response_type" : "in_channel", "text" : txt})
+
+def getTokenRow(team):
+    cur = get_db().cursor()
+    cur.execute('SELECT * FROM tokens WHERE team=?', [team])
+    return cur.fetchone()
 
 if __name__ == '__main__':
     print('Starting server...')
