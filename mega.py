@@ -3,8 +3,10 @@ import os
 import json
 import sqlite3
 from string import digits, ascii_lowercase, ascii_uppercase
+from subprocess import Popen
 
 application = Flask(__name__)
+application.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 DATABASE = 'mega.db'
 def get_db():
@@ -33,9 +35,15 @@ def register():
 @application.route('/mega/img', methods=['POST'])
 def upload():
     f = request.files.get('file')
-    if f is None:
-        return 'No file'
-    f.save("aaa.gif")
+    if f is None or not allowedFile(f.filename):
+        return 'Bad file'
+    name = os.path.splitext(f.filename)[0]
+    if os.path.isdir(name):
+        return 'Error: emoji with same name currently processing'
+    os.mkdir(name)
+    f.save(name + '/' + f.filename)
+    Popen(["python", "cut.py", name])
+    return 'File upload successful'
 
 @application.route('/mega/slash', methods=['POST'])
 def mega():
@@ -69,6 +77,9 @@ def getTokenRow(team):
     cur = get_db().cursor()
     cur.execute('SELECT * FROM tokens WHERE team=?', [team])
     return cur.fetchone()
+
+def allowedFile(name):
+    return '.' in name and name.rsplit('.', 1)[1] in set(['gif'])
 
 if __name__ == '__main__':
     print('Starting server...')
