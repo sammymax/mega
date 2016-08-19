@@ -1,25 +1,11 @@
 import os, sys
 from subprocess import Popen, call, DEVNULL
-from PIL import Image
 import shutil
 from string import digits, ascii_lowercase, ascii_uppercase
 import traceback
+import emojinator.upload as uploader
 
 arr62 = digits + ascii_lowercase + ascii_uppercase
-
-def getsz(w, h):
-    minpad = 10000000
-    bestSz = 25
-    # i : how many we tile with
-    for i in range(25,75):
-        rw = i * ((w + i - 1) // i)
-        rh = i * ((h + i - 1) // i)
-        if rw*rh - w*h <= minpad:
-            minpad = rw*rh - w*h
-            bestSz = i
-    rw = bestSz * ((w + bestSz - 1) // bestSz)
-    rh = bestSz * ((h + bestSz - 1) // bestSz)
-    return (bestSz, rw, rh)
 
 def ffCall(inf, outf, filters, sync=False):
     print(filters)
@@ -40,18 +26,17 @@ def ffCall(inf, outf, filters, sync=False):
         with open('log.txt', 'a+') as log:
             log.write(lStr)
 
+# python cut.py [gif name without file extension] [team name] [session cookie] [sz] [w] [h]
 if __name__ == '__main__':
     print(sys.argv)
-    if len(sys.argv) == 1 or not os.path.isdir(sys.argv[1]) or not \
+    if len(sys.argv) != 7 or not os.path.isdir(sys.argv[1]) or not \
             os.path.isfile(sys.argv[1] + '/' + sys.argv[1] + '.gif'):
-        print("Invalid .gif argument")
+        print("Bad arguments")
         exit()
     f = sys.argv[1]
     os.chdir(f)
     gif = f + '.gif'
-    dim = Image.open(gif).size
-    print(dim)
-    sz, w, h = getsz(dim[0], dim[1])
+    sz, w, h = int(sys.argv[4]), int(sys.argv[5]), int(sys.argv[6])
     print(sz, str(w) + "x" + str(h))
 
     uf = '__' + f + '__'
@@ -62,3 +47,7 @@ if __name__ == '__main__':
             ffCall('__' + gif, uf + arr62[i] + arr62[j] + '.gif',
                     "crop={}:{}:{}:{}".format(sz, sz, sz*i, sz*j), True)
     os.remove('__' + gif)
+    os.chdir('..')
+    gifArgs = [f + '/' + d for d in os.listdir(f)]
+    uploader.main(sys.argv[2], sys.argv[3], gifArgs)
+    shutil.rmtree(f)

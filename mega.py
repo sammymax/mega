@@ -2,8 +2,10 @@ from flask import Flask, jsonify, request, g, redirect
 import os
 import json
 import sqlite3
+from PIL import Image
 from string import digits, ascii_lowercase, ascii_uppercase
 from subprocess import Popen
+import traceback
 
 application = Flask(__name__)
 application.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
@@ -35,6 +37,7 @@ def register():
 @application.route('/mega/img', methods=['POST'])
 def upload():
     f = request.files.get('file')
+    team, cookie = request.form.get('domain'), request.form.get('cookie')
     if f is None or not allowedFile(f.filename):
         return 'Bad file'
     name = os.path.splitext(f.filename)[0]
@@ -42,7 +45,13 @@ def upload():
         return 'Error: emoji with same name currently processing'
     os.mkdir(name)
     f.save(name + '/' + f.filename)
-    Popen(["python", "cut.py", name])
+
+    dim = Image.open(name + '/' + f.filename).size
+    sz, w, h = getsz(dim[0], dim[1])
+    get_db().cursor().execute('INSERT INTO dims VALUES (?,?,?,?)', [team, name, w//sz, h//sz])
+    get_db().commit()
+
+    Popen(["python", "cut.py", name, team, cookie, str(sz), str(w), str(h)])
     return 'File upload successful'
 
 @application.route('/mega/slash', methods=['POST'])
@@ -80,6 +89,20 @@ def getTokenRow(team):
 
 def allowedFile(name):
     return '.' in name and name.rsplit('.', 1)[1] in set(['gif'])
+
+def getsz(w, h):
+    minpad = 10000000
+    bestSz = 25
+    # i : how many we tile with
+    for i in range(25,75):
+        rw = i * ((w + i - 1) // i)
+        rh = i * ((h + i - 1) // i)
+        if rw*rh - w*h <= minpad:
+            minpad = rw*rh - w*h
+            bestSz = i
+    rw = bestSz * ((w + bestSz - 1) // bestSz)
+    rh = bestSz * ((h + bestSz - 1) // bestSz)
+    return (bestSz, rw, rh)
 
 if __name__ == '__main__':
     print('Starting server...')
