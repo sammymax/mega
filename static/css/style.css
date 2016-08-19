@@ -28,4 +28,5 @@ fieldset {
 
 input[type='file'] {
     color: transparent;
+    width: 200px;
 }
